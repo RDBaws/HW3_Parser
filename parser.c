@@ -10,8 +10,8 @@ instruction *code;
 int cIndex;
 symbol *table;
 int tIndex;
-int unmarked = -1;
-int marked = 0;
+int unmarked = 0;
+int marked = 1;
 
 void emit(int opname, int level, int mvalue);
 void addToSymbolTable(int k, char n[], int v, int l, int a, int m);
@@ -28,11 +28,15 @@ int lexLevel;
 //Indicate if theres an error
 int error = 0;
 //Indicate where we are in the lexeme table
-int lexPosition = 0;
-
+int lexPosition;
+//Hold the index of the symbol being searched for
 int symIdx;
+int jpcIdx;
+//Hold the current token
 lexeme token;
+//Make the lexeme list global
 lexeme* globalLex;
+//Returns the next token
 lexeme getNextToken();
 
 //Function Stubs for Required Functions
@@ -52,16 +56,25 @@ instruction *parse(lexeme *list, int printTable, int printCode)
 {
     globalLex = list;
     code = NULL;
-    tIndex = 1;
+    tIndex = 0;
+    cIndex = 0;
+    jpcIdx = 0;
+    lexPosition = 0;
+    token = globalLex[lexPosition];
 
     table = (symbol*) malloc(MAX_SYMBOL_COUNT * sizeof (symbol));
     code = (instruction*) malloc(MAX_CODE_LENGTH * sizeof(instruction));
-    cIndex = 0;
 
     program();
 
 
+    if(printTable == 1)
+        printsymboltable();
+    if(printCode == 1)
+        printassemblycode();
+
     printsymboltable();
+
 
     /* this line is EXTREMELY IMPORTANT, you MUST uncomment it
         when you test your code otherwise IT WILL SEGFAULT in
@@ -70,29 +83,29 @@ instruction *parse(lexeme *list, int printTable, int printCode)
     code[cIndex].opcode = -1;
     */
 
-    //code[cIndex].opcode = -1;
+    code[cIndex].opcode = -1;
 
     return code;
 }
 
 lexeme getNextToken(){
-    return globalLex[lexPosition++];
+    lexPosition++;
+    return globalLex[lexPosition];
 }
 
 void program(){
-    printf("Inside program\n");
-    //todo Check emit value
+
+
     emit(7, 0, 0);
     addToSymbolTable(3, "main", 0, 0, 0, unmarked);
     lexLevel = -1;
     block();
-    token = getNextToken();
     if(token.type != periodsym){
         error = 1;
         printparseerror(error);
+        exit(error);
     }
     emit(9, 0, 3);
-
 
     for(int line = 0; line < cIndex; line++){
         if(code[line].opcode == 5){
@@ -103,7 +116,7 @@ void program(){
 }
 
 void block(){
-    printf("In Block\n");
+
     lexLevel++;
     int procedure_idx = tIndex - 1;
     constDeclaration();
@@ -121,8 +134,6 @@ void block(){
 }
 
 void constDeclaration(){
-    //todo Remove
-    printf("Inside Const Declaration\n");
 
     //Index of symbol in symbol table
     if(token.type == constsym){
@@ -131,6 +142,7 @@ void constDeclaration(){
             if (token.type != identsym) {
                 error = 2;
                 printparseerror(error);
+                exit(error);
             }
 
             token = getNextToken();
@@ -138,6 +150,7 @@ void constDeclaration(){
             if (symIdx != -1) {
                 error = 19;
                 printparseerror(19);
+                exit(error);
             }
 
             char *identName = token.name;
@@ -145,15 +158,17 @@ void constDeclaration(){
             if (token.type != assignsym) {
                 error = 5;
                 printparseerror(5);
+                exit(error);
             }
 
             token = getNextToken();
             if (token.type != numbersym) {
                 error = 2;
                 printparseerror(2);
+                exit(error);
             }
 
-            addToSymbolTable(1, identName, token.value, lexLevel, 0, -1);
+            addToSymbolTable(1, identName, token.value, lexLevel, 0, unmarked);
             token = getNextToken();
         }while(token.type == commasym);
 
@@ -161,9 +176,11 @@ void constDeclaration(){
             if(token.type == identsym) {
                 error = 13;
                 printparseerror(2);
+                exit(error);
             }else {
                 error = 14;
                 printparseerror(14);
+                exit(error);
             }
         }
 
@@ -172,37 +189,45 @@ void constDeclaration(){
 }
 
 int varDeclaration(){
-    //todo Remove
-    printf("Inside Var Declaration\n");
+
+
+
+
+
     int numVars = 0;
-    token = getNextToken();
     if(token.type == varsym){
         do{
             numVars++;
             token = getNextToken();
+
             if(token.type != identsym){
                 error = 3;
                 printparseerror(3);
+                exit(error);
             }
             symIdx = multipleDeclarationCheck(token);
             if(symIdx != -1){
                 error = 18;
                 printparseerror(18);
+                exit(error);
             }
             if(lexLevel == 0){
                 addToSymbolTable(2, token.name,0, lexLevel, numVars-1, unmarked);
             } else{
-                addToSymbolTable(2, token.name, 9, lexLevel, numVars+2, unmarked);
+                addToSymbolTable(2, token.name, 0, lexLevel, numVars+2, unmarked);
             }
             token = getNextToken();
         }while(token.type == commasym);
+
         if(token.type != semicolonsym){
             if(token.type == identsym){
-                error = 13;
-                printparseerror(13);
+                error = 18;
+                printparseerror(error);
+                exit(error);
             }else{
                 error = 14;
-                printparseerror(14);
+                printparseerror(error);
+                exit(error);
             }
         }
         token = getNextToken();
@@ -212,34 +237,33 @@ int varDeclaration(){
 
 void procedureDeclaration(){
 
-    //todo Remove
-    printf("Inside Proc Declaration\n");
-
     while(token.type == procsym){
         token = getNextToken();
         if(token.type != identsym){
-            //todo Fix Error
-            error = 255;
+            error = 7;
             printparseerror(error);
         }
 
         symIdx = multipleDeclarationCheck(token);
         if(symIdx != -1){
-            //todo Fix Error
-            error = 255;
-            printparseerror(255);
+
+            error = 18;
+            printparseerror(error);
+            exit(error);
         }
         addToSymbolTable(3, token.name, 0, lexLevel, 0, unmarked);
         token = getNextToken();
         if(token.type != semicolonsym){
-            error = 255;
+            error = 4;
             printparseerror(error);
+            exit(error);
         }
         token = getNextToken();
         block();
         if(token.type != semicolonsym){
-            error = 255;
+            error = 4;
             printparseerror(error);
+            exit(error);
         }
         token = getNextToken();
         emit(2, 0, 0);
@@ -248,31 +272,26 @@ void procedureDeclaration(){
 
 void statement(){
 
-    //todo Remove
-    printf("Inside Statement Declaration\n");
-    //printsymboltable();
-    printassemblycode();
-
-    int jpcIdx = cIndex;
-
     if(token.type == identsym) {
-        //todo Remove
-        printf("Ident\n");
+
         symIdx = findSym(token, 2);
         if (symIdx == -1) {
             if (findSym(token, 1) != findSym(token, 3)) {
-                error = 255;
+                error = 6;
                 printparseerror(error);
+                exit(error);
             } else {
-                error = 255;
+                error = 19;
                 printparseerror(error);
+                exit(error);
             }
         }
 
         token = getNextToken();
         if (token.type != assignsym) {
-            error = 255;
+            error = 5;
             printparseerror(error);
+            exit(error);
         }
         token = getNextToken();
         expression();
@@ -280,11 +299,7 @@ void statement(){
         return;
     }
 
-
     if(token.type == beginsym){
-        //todo Remove
-        printf("Begin\n");
-
         do{
             token = getNextToken();
             statement();
@@ -292,11 +307,13 @@ void statement(){
 
         if(token.type != endsym){
             if(token.type == identsym || token.type == beginsym || token.type == ifsym || token.type == whilesym || token.type == readsym || token.type == writesym || token.type == callsym){
-                error = 255;
+                error = 15;
                 printparseerror(error);
+                exit(error);
             }else{
-                error = 255;
+                error = 16;
                 printparseerror(error);
+                exit(error);
             }
         }
 
@@ -305,30 +322,24 @@ void statement(){
     }
 
     if(token.type== ifsym){
-        //todo Remove
-        printf("IF\n");
-
 
         token = getNextToken();
         condition();
         jpcIdx = cIndex;
 
-        emit(8, 0, 0);
-        //todo Check this
+        emit(8, 0, token.value);
         if(token.type != thensym){
-            error = 255;
+            error = 8;
             printparseerror(error);
+            exit(error);
         }
         token = getNextToken();
         statement();
         if(token.type == elsesym){
 
-            //todo Remove
-            printf("ELSE\n");
-
+            //printf("ELSE\n");
             int jmpIdx = cIndex;
-            //todo Check this
-            emit(7, 0, jmpIdx);
+            emit(7, 0, token.value);
             code[jpcIdx].m = cIndex * 3;
             token = getNextToken();
             statement();
@@ -340,42 +351,44 @@ void statement(){
     }
 
     if(token.type == whilesym){
-        //todo Remove
-        printf("While\n");
+        //printf("While\n");
 
         token = getNextToken();
         int loopIdx = cIndex;
         condition();
         if(token.type != dosym){
-            error = 255;
+            error = 9;
             printparseerror(255);
+            exit(error);
         }
         token = getNextToken();
         jpcIdx = cIndex;
-        //todo Check this
         emit(8, 0, token.value);
         statement();
         emit(7, 0, loopIdx*3);
+        code[jpcIdx].m = cIndex * 3;
         return;
     }
 
     if(token.type == readsym){
-        //todo Remove
-        printf("read\n");
+        //printf("read\n");
 
         token = getNextToken();
         if(token.type != identsym){
-            error = 255;
+            error = 6;
             printparseerror(error);
+            exit(error);
         }
         symIdx = findSym(token, 2);
         if(symIdx == -1){
             if(findSym(token, 1) != findSym(token, 3)){
-                error = 255;
+                error = 6;
                 printparseerror(error);
+                exit(error);
             }else{
-                error = 255;
+                error = 19;
                 printparseerror(error);
+                exit(error);
             }
         }
         token = getNextToken();
@@ -388,40 +401,39 @@ void statement(){
     }
 
     if(token.type == writesym){
-        //todo Remove
-        printf("write\n");
 
         token = getNextToken();
         expression();
+        //Write
         emit(9, 0, 1);
         return;
     }
 
     if(token.type == callsym){
-        //todo Remove
-        printf("call\n");
-
         token = getNextToken();
         symIdx = findSym(token, 3);
         if(symIdx == -1){
             if(findSym(token, 1) != findSym(token, 2)){
-                error = 255;
-                printparseerror(255);
-            }else{
-                error = 222;
+                error = 6;
                 printparseerror(error);
+                exit(error);
+            }else{
+                error = 19;
+                printparseerror(error);
+                exit(error);
             }
         }
         token = getNextToken();
-        emit(05, lexLevel - table[symIdx].level, symIdx);
+        //Cal
+
+        emit(5, lexLevel - table[symIdx].level, symIdx);
     }
 }
 
 
 void condition(){
 
-    //todo Remove
-    printf("Inside Condition\n");
+
 
     if(token.type == oddsym){
         token = getNextToken();
@@ -475,17 +487,15 @@ void condition(){
         }
 
         else{
-            error = 255;
+            error = 10;
             printparseerror(error);
+            exit(error);
         }
     }
 }
 
 
 void expression(){
-
-    //todo Remove
-    printf("Inside Expression Declaration\n");
 
     if(token.type == subsym){
         token = getNextToken();
@@ -527,17 +537,14 @@ void expression(){
         }
     }
 
-    //todo Check this typo in pseudocode
     if(token.type == identsym || token.type == numbersym || token.type == oddsym || token.type == lparensym){
-        error = 255;
+        error = 17;
         printparseerror(error);
+        exit(error);
     }
 }
 
 void term(){
-
-    //todo Remove
-    printf("Inside term Declaration\n");
 
     factor();
     while(token.type == multsym || token.type == divsym || token.type == modsym){
@@ -566,20 +573,19 @@ void term(){
 
 void factor(){
 
-    //todo Remove
-    printf("Inside Factor Declaration\n");
-
     if(token.type == identsym){
         int symIdx_var = findSym(token, 2);
         int symIdx_const = findSym(token, 1);
 
         if(symIdx_var == -1 && symIdx_const == -1){
             if(findSym(token, 3) != -1){
-                error = 255;
+                error = 11;
                 printparseerror(error);
+                exit(error);
             }else{
-                error = 255;
+                error = 19;
                 printparseerror(error);
+                exit(error);
             }
         }
 
@@ -591,33 +597,33 @@ void factor(){
             emit(1, 0, table[symIdx_const].val);
         token = getNextToken();
     }else if(token.type == numbersym){
-        //todo Check m value
+
         //Lit
-        emit(1,0,0);
+        emit(1,0,token.value);
         token = getNextToken();
     }else if(token.type == lparensym){
         token = getNextToken();
         expression();
         if(token.type != rparensym){
-            error = 255;
+            error = 12;
             printparseerror(error);
+            exit(error);
         }
         token = getNextToken();
     }else{
-        error = 255;
+        error = 11;
         printparseerror(error);
+        exit(error);
     }
 }
 
 
 
+int multipleDeclarationCheck(lexeme tok){
 
-
-//todo FIX THIS to check mark
-int multipleDeclarationCheck(lexeme token){
     int seekIndex = tIndex;
     while(seekIndex != 0){
-        if(strcmp(table[seekIndex].name, token.name) == 0){
+        if(strcmp(table[seekIndex].name, tok.name) == 0){
             if(table[seekIndex].level == lexLevel){
                 return seekIndex;
             }
@@ -633,13 +639,10 @@ int multipleDeclarationCheck(lexeme token){
 
 int findSym(lexeme tok, int kind){
 
-    printf("Finding %s\n", tok.name);
-    int seekIndex = symIdx;
-    while(seekIndex >= 0){
-        if(strcmp(table[seekIndex].name, tok.name) == 0 && table[seekIndex].kind == kind && table[seekIndex].mark == unmarked){
-            return seekIndex;
-        }else
-            seekIndex--;
+    for(int i = 0; i <= tIndex; i++) {
+        if (strcmp(table[i].name, tok.name) == 0 && table[i].kind == kind) {
+            return i;
+        }
     }
     return -1;
 }
@@ -750,8 +753,8 @@ void printparseerror(int err_code)
             break;
     }
 
-    free(code);
-    free(table);
+//    free(code);
+//    free(table);
 }
 
 void printsymboltable()

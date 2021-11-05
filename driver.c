@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
         return 0;
     }
 
-    execute_program(code, outputs);
+    //execute_program(code, outputs);
 
     free(input);
     free(list);
